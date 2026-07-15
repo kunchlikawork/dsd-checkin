@@ -33,8 +33,14 @@
     </div>
   </div>
 
+  <!-- ฟอร์มซ่อนเพื่อใช้ส่งข้อมูลทะลุการบล็อกของ Browser -->
+  <form id="hidden-form" method="POST" target="hidden-iframe" style="display:none;">
+    <input type="text" name="regId" id="form-reg-id">
+  </form>
+  <iframe name="hidden-iframe" id="hidden-iframe" style="display:none;"></iframe>
+
   <script>
-    // ⚠️ อย่าลืมนำลิงก์ Web App (ที่ลงท้ายด้วย /exec) จาก Google Apps Script มาใส่ตรงนี้
+    // ⚠️ นำลิงก์ Web App (ที่ลงท้ายด้วย /exec) จาก Google Apps Script มาวางตรงนี้
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyRSZUSEUAboaJY3_8PQyaf3cwnzXtvUJMMRst_y5do4Wg3agxGxNegB0pEZ8hDZY8mRw/exec"; 
 
     const video = document.createElement("video");
@@ -50,14 +56,9 @@
     let animationFrameId = null;
     let isScanning = false;
 
-    // ฟังก์ชันเปิดกล้องเวอร์ชันแก้ไขสำหรับทุกอุปกรณ์
     async function startCamera() {
       try {
-        // ขอกล้องแบบพื้นฐานเพื่อให้คอมพิวเตอร์และมือถือเปิดกล้องที่พร้อมที่สุดได้ทันที
-        streamRef = await navigator.mediaDevices.getUserMedia({ 
-          video: true 
-        });
-        
+        streamRef = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = streamRef;
         video.setAttribute("playsinline", true);
         video.play();
@@ -107,39 +108,21 @@
     }
 
     function sendCheckIn(regId) {
-      resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-yellow-100 text-yellow-800 block";
-      resultMessage.innerText = "⏳ กำลังบันทึกข้อมูลไปยัง Google Sheets...";
+      resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-green-100 text-green-800 block";
+      resultMessage.innerText = "✔️ สแกนสำเร็จ! กำลังบันทึกข้อมูลและส่งอีเมล...";
 
-      fetch(WEB_APP_URL, {
-        method: "POST",
-        body: JSON.stringify({ regId: regId })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.message.includes("สำเร็จ")) {
-          resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-green-100 text-green-800 block";
-        } else if (data.message.includes("ไปแล้ว")) {
-          resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-orange-100 text-orange-800 block";
-        } else {
-          resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-red-100 text-red-800 block";
-        }
-        resultMessage.innerText = data.message;
-        
-        setTimeout(() => {
-          resultBox.classList.add("hidden");
-          isScanning = true;
-          animationFrameId = requestAnimationFrame(tick);
-        }, 3000);
-      })
-      .catch(err => {
-        resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-red-100 text-red-800 block";
-        resultMessage.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
-        setTimeout(() => {
-          resultBox.classList.add("hidden");
-          isScanning = true;
-          animationFrameId = requestAnimationFrame(tick);
-        }, 3000);
-      });
+      // ใช้ Form ส่งข้อมูลตรงเข้า Google Sheets เพื่อเลี่ยง CORS Error
+      const form = document.getElementById("hidden-form");
+      form.action = WEB_APP_URL;
+      document.getElementById("form-reg-id").value = regId;
+      form.submit();
+      
+      // หน่วงเวลา 3 วินาทีเพื่อให้เจ้าหน้าที่สแกนคนต่อไปได้
+      setTimeout(() => {
+        resultBox.classList.add("hidden");
+        isScanning = true;
+        animationFrameId = requestAnimationFrame(tick);
+      }, 3000);
     }
   </script>
 </body>
