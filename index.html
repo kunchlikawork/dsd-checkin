@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ระบบเช็คอินหน้างาน</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <style>
+    body { font-family: 'Sarabun', sans-serif; }
+    #video-container { position: relative; width: 100%; max-width: 500px; margin: auto; }
+    #canvas { width: 100%; height: auto; display: none; border-radius: 8px; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+  <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md text-center">
+    <h1 class="text-xl font-bold text-gray-800 mb-2">ระบบเช็คอินหน้างาน</h1>
+    <p class="text-xs text-gray-500 mb-6 font-light">สแกนคิวอาร์โค้ดเพื่อเช็คอินเข้างาน</p>
+    
+    <div class="flex gap-4 justify-center mb-6">
+      <button id="btn-start" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-full shadow transition-all duration-200">เปิดกล้อง</button>
+      <button id="btn-stop" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-full shadow transition-all duration-200 opacity-50 pointer-events-none">ปิดกล้อง</button>
+    </div>
+
+    <div id="video-container" class="overflow-hidden border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 aspect-video flex items-center justify-center">
+      <div id="loadingMessage">🎥 กล้องยังไม่ได้เปิด</div>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="result-box" class="mt-6 p-4 rounded-xl text-lg font-semibold hidden">
+      <div id="result-message"></div>
+    </div>
+  </div>
+
+  <script>
+    // วางลิงก์ Web App ที่ก๊อปปี้มาจาก Google Apps Script ตรงนี้
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyc3U02dmYCJITk4UFFloPJNQsRBxEl6Ejr2YJf3OAFKfmEpedn0km-sICpksHd6cL9/exec"; 
+
+    const video = document.createElement("video");
+    const canvasElement = document.getElementById("canvas");
+    const canvas = canvasElement.getContext("2d");
+    const loadingMessage = document.getElementById("loadingMessage");
+    const btnStart = document.getElementById("btn-start");
+    const btnStop = document.getElementById("btn-stop");
+    const resultBox = document.getElementById("result-box");
+    const resultMessage = document.getElementById("result-message");
+    
+    let streamRef = null;
+    let animationFrameId = null;
+    let isScanning = false;
+
+    async function startCamera() {
+      try {
+        streamRef = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = streamRef;
+        video.setAttribute("playsinline", true);
+        video.play();
+        btnStart.classList.add('opacity-50', 'pointer-events-none');
+        btnStop.classList.remove('opacity-50', 'pointer-events-none');
+        loadingMessage.innerText = "⏳ กำลังโหลดกล้อง...";
+        isScanning = true;
+        animationFrameId = requestAnimationFrame(tick);
+      } catch (err) {
+        alert("ไม่สามารถเปิดกล้องได้: " + err.message);
+      }
+    }
+
+    function stopCamera() {
+      isScanning = false;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (streamRef) streamRef.getTracks().forEach(track => track.stop());
+      canvasElement.style.display = "none";
+      loadingMessage.style.display = "block";
+      loadingMessage.innerText = "🎥 กล้องปิดอยู่";
+      btnStart.classList.remove('opacity-50', 'pointer-events-none');
+      btnStop.classList.add('opacity-50', 'pointer-events-none');
+    }
+
+    btnStart.addEventListener("click", startCamera);
+    btnStop.addEventListener("click", stopCamera);
+
+    function tick() {
+      if (!isScanning) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        loadingMessage.style.display = "none";
+        canvasElement.style.display = "block";
+        canvasElement.height = video.videoHeight;
+        canvasElement.width = video.videoWidth;
+        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+        
+        const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+        
+        if (code && code.data) {
+          isScanning = false;
+          sendCheckIn(code.data);
+          return;
+        }
+      }
+      animationFrameId = requestAnimationFrame(tick);
+    }
+
+    function sendCheckIn(regId) {
+      resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-yellow-100 text-yellow-800 block";
+      resultMessage.innerText = "⏳ กำลังบันทึกข้อมูลไปยัง Google Sheets...";
+
+      fetch(WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({ regId: regId })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.message.includes("สำเร็จ")) {
+          resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-green-100 text-green-800 block";
+        } else if (data.message.includes("ไปแล้ว")) {
+          resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-orange-100 text-orange-800 block";
+        } else {
+          resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-red-100 text-red-800 block";
+        }
+        resultMessage.innerText = data.message;
+        
+        setTimeout(() => {
+          resultBox.classList.add("hidden");
+          isScanning = true;
+          animationFrameId = requestAnimationFrame(tick);
+        }, 3000);
+      })
+      .catch(err => {
+        resultBox.className = "mt-6 p-4 rounded-xl text-lg font-semibold bg-red-100 text-red-800 block";
+        resultMessage.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+        setTimeout(() => {
+          resultBox.classList.add("hidden");
+          isScanning = true;
+          animationFrameId = requestAnimationFrame(tick);
+        }, 3000);
+      });
+    }
+  </script>
+</body>
+</html>
