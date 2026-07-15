@@ -34,8 +34,8 @@
   </div>
 
   <script>
-    // วางลิงก์ Web App ที่ก๊อปปี้มาจาก Google Apps Script ตรงนี้
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyc3U02dmYCJITk4UFFloPJNQsRBxEl6Ejr2YJf3OAFKfmEpedn0km-sICpksHd6cL9/exec"; 
+    // ⚠️ อย่าลืมนำลิงก์ Web App (ที่ลงท้ายด้วย /exec) จาก Google Apps Script มาใส่ตรงนี้
+    const WEB_APP_URL = "ใส่_URL_เว็บแอปของคุณที่นี่"; 
 
     const video = document.createElement("video");
     const canvasElement = document.getElementById("canvas");
@@ -50,9 +50,14 @@
     let animationFrameId = null;
     let isScanning = false;
 
+    // ฟังก์ชันเปิดกล้องเวอร์ชันแก้ไขสำหรับทุกอุปกรณ์
     async function startCamera() {
       try {
-        streamRef = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        // ขอกล้องแบบพื้นฐานเพื่อให้คอมพิวเตอร์และมือถือเปิดกล้องที่พร้อมที่สุดได้ทันที
+        streamRef = await navigator.mediaDevices.getUserMedia({ 
+          video: true 
+        });
+        
         video.srcObject = streamRef;
         video.setAttribute("playsinline", true);
         video.play();
